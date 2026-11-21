@@ -1,0 +1,17 @@
+[package]
+name = "hypper-android"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "hypper_android"
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+hypper-rust = { path = "../hypper-rust" }
+jni = "0.21"
+
+[profile.release]
+opt-level = 2
+lto = false

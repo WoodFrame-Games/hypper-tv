@@ -1,0 +1,16 @@
+# Rust / Gradle / Python build artifacts
+target/
+build/
+.gradle/
+local.properties
+*.iml
+.idea/
+__pycache__/
+*.pyc
+*.pyo
+*.apk
+*.aab
+
+# OS junk
+.DS_Store
+Thumbs.db
