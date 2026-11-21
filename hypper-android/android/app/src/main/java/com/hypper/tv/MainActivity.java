@@ -325,8 +325,29 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private boolean playFile(File f, int wallW, int wallH, float fpsValue, long startMs,
-                             VideoResolver.Log log) {
+    private boolean playFile(final File f, int wallW, int wallH, final float fpsValue,
+                             final long startMs, final VideoResolver.Log log) {
+        // Fast path: sequential MediaCodec decoding (real-time capable).
+        boolean ok = VideoPump.pump(f, wallW, wallH, fpsValue, startMs, new VideoPump.Sink() {
+            @Override
+            public void push(byte[] rgb, int w, int h) {
+                nativePushFrame(rgb, w, h);
+            }
+
+            @Override
+            public boolean running() {
+                return isPumping() && MainActivity.this.nativeIsRunning();
+            }
+
+            @Override
+            public void line(String s) {
+                log.line(s);
+            }
+        });
+        if (ok) {
+            return true;
+        }
+        log.line("видео: MediaCodec не сработал, пробую MediaMetadataRetriever");
         MediaMetadataRetriever r = new MediaMetadataRetriever();
         try {
             r.setDataSource(f.getAbsolutePath());
@@ -391,7 +412,7 @@ public class MainActivity extends Activity {
                 return sent > 0;
             }
             try {
-                Bitmap bm = r.getFrameAtTime(t * 1000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+                Bitmap bm = r.getFrameAtTime(t * 1000L, MediaMetadataRetriever.OPTION_CLOSEST);
                 if (bm == null) {
                     if (t == 0) {
                         log.line("видео: кадр не декодируется");

@@ -63,6 +63,11 @@ docs/            Screenshots
   terrain on slopes. The wall centre can be overridden (`cy`).
 - **View ids** for spawned monitors start at `actor*1000 + 800 + i`; lower sub-ids
   collide with the game's own scene objects.
+- **Frame rate.** `MediaMetadataRetriever` with `OPTION_CLOSEST_SYNC` only returns
+  keyframes (about one every 2 s in the test video), so the picture visibly
+  advanced only every couple of seconds. The app now decodes sequentially with
+  `MediaCodec` (`VideoPump.java`), paced to real time, and falls back to
+  `MediaMetadataRetriever` with `OPTION_CLOSEST` if the codec path fails.
 
 ## Building
 
