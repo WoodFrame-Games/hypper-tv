@@ -113,11 +113,10 @@ Add `--ez pattern true` for the calibration wall.
 
 ## Python prototypes
 
-`PhotonPy/` contains the original scripts needed to reproduce the video wall
-(`hypper_tv.py`, `monitor_test.py`, `ptWorkFreeze.py`, `photon0509.py`) plus
-`monitor_fill_test.py` (the red/green pixel-fill diagnostic). They implement
-the same protocol and were used to calibrate geometry and text layout. They
-need the game's Photon AppId/auth constants (already present) and Python 3.
+`PhotonPy/hypper_tv.py` is a **single self-contained script** that reproduces the
+full cycle (Photon auth, create room, spawn the monitor wall, stream video). The
+protocol helpers are embedded as compressed modules inside it, so no other files
+are needed. Run `python hypper_tv.py --help` for options.
 
 ## Legal
 
