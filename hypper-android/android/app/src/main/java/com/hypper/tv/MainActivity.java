@@ -208,6 +208,7 @@ public class MainActivity extends Activity {
                 log("не удалось запустить поток");
                 return;
             }
+            startService(new android.content.Intent(this, PumpService.class));
             if (!video.isEmpty() && !patternBox.isChecked()) {
                 startFramePump(video, text(startSec));
             }
@@ -218,6 +219,7 @@ public class MainActivity extends Activity {
             nativeStop();
             sessionActive = false;
             startButton.setEnabled(true);
+            stopService(new android.content.Intent(this, PumpService.class));
             log("стоп");
         });
 
@@ -244,6 +246,7 @@ public class MainActivity extends Activity {
                     if (startButton != null) {
                         startButton.setEnabled(true);
                     }
+                    stopService(new android.content.Intent(MainActivity.this, PumpService.class));
                     log("сессия завершилась; можно запустить заново");
                 }
                 handler.postDelayed(this, 500);

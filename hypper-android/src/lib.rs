@@ -198,31 +198,49 @@ fn cell_text_from_frame(
     size: u32,
 ) -> String {
     let mut s = String::with_capacity(6200);
-    s.push_str(&format!("<size={size}%>"));
+    s.push_str(&format!("<size={size}%><b>"));
     for y in 0..h as usize {
-        s.push_str("<b>");
         // Monitor renders the text upside down (scale.y = -1) as well as
         // mirrored, so pre-flip the row order to keep the picture upright.
         let sy = (y0 + (h as usize - 1 - y)).min(wall_h - 1);
-        for x in 0..w as usize {
+        let mut x = 0usize;
+        while x < w as usize {
             // Monitor is rotated 180° about Y, so the game mirrors its text
             // horizontally. Pre-mirror the crop to cancel that out.
             let gx = (x0 + (w as usize - 1 - x)).min(wall_w - 1);
-            let gy = sy;
-            let i = (gy * wall_w + gx) * 3;
-            if i + 2 < frame.len() {
-                s.push_str(&format!(
-                    "<color=#{:X}{:X}{:X}>\u{2588}</color>",
-                    frame[i] >> 4, frame[i + 1] >> 4, frame[i + 2] >> 4
-                ));
+            let i = (sy * wall_w + gx) * 3;
+            let (r, g, b) = if i + 2 < frame.len() {
+                (frame[i] >> 4, frame[i + 1] >> 4, frame[i + 2] >> 4)
+            } else {
+                (0, 0, 0)
+            };
+            // Run-length encode equal colours: "<color=#A3F>████</color>"
+            // instead of one tag per pixel (much less Photon traffic).
+            let mut x2 = x + 1;
+            while x2 < w as usize {
+                let gx2 = (x0 + (w as usize - 1 - x2)).min(wall_w - 1);
+                let i2 = (sy * wall_w + gx2) * 3;
+                let same = i2 + 2 < frame.len()
+                    && (frame[i2] >> 4) == r
+                    && (frame[i2 + 1] >> 4) == g
+                    && (frame[i2 + 2] >> 4) == b;
+                if !same {
+                    break;
+                }
+                x2 += 1;
             }
+            s.push_str(&format!("<color=#{r:X}{g:X}{b:X}>"));
+            for _ in x..x2 {
+                s.push('\u{2588}');
+            }
+            s.push_str("</color>");
+            x = x2;
         }
-        s.push_str("</b>");
         if y + 1 < h as usize {
             s.push('\n');
         }
     }
-    s.push_str("</size>");
+    s.push_str("</b></size>");
     s
 }
 
@@ -445,6 +463,11 @@ fn worker(vm: Arc<JavaVM>, cfg: Cfg) {
     let mut last_text = vec![String::new(); total as usize];
     let mut last_refresh = Instant::now();
     while RUNNING.load(Ordering::Relaxed) {
+        if let Some(reason) = g.disconnect_reason() {
+            let msg = format!("соединение потеряно: {reason}; останавливаю стену");
+            log(&vm, &msg);
+            return;
+        }
         if last_refresh.elapsed() >= Duration::from_secs(10) {
             full_resync = true;
             last_refresh = Instant::now();

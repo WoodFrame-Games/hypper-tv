@@ -57,6 +57,7 @@ pub struct Photon {
     last_ping: Instant,
     pub debug: bool,
     pub actor: Option<u32>,
+    disconnect: Option<String>,
 }
 
 impl Photon {
@@ -77,6 +78,11 @@ impl Photon {
     }
 
     fn send_cmds(&mut self, cmds: Vec<Vec<u8>>) {
+        // After a server-side Disconnect there is no point in flooding a dead
+        // socket; the wall loop checks disconnect_reason() and stops.
+        if self.disconnect.is_some() {
+            return;
+        }
         let mut pkt = Vec::new();
         pkt.extend_from_slice(&self.peer_id.to_le_bytes());
         pkt.push(0);
@@ -102,6 +108,11 @@ impl Photon {
         }
     }
 
+    /// Some(reason) if the server closed the connection (e.g. flood kick).
+    pub fn disconnect_reason(&self) -> Option<&str> {
+        self.disconnect.as_deref()
+    }
+
     fn next_seq(&mut self, ch: u8) -> u32 {
         let v = self.seq.entry(ch).or_insert(0);
         *v += 1;
@@ -124,6 +135,7 @@ impl Photon {
             last_ping: Instant::now(),
             debug: std::env::var("HYPPER_RUST_DEBUG").is_ok(),
             actor: None,
+            disconnect: None,
         };
         let cmd = p.command(T_CONNECT, 255, 1, 1, CONNECT_PAYLOAD);
         p.send_cmds(vec![cmd]);
@@ -237,6 +249,14 @@ impl Photon {
                     let acked = u32::from_be_bytes([payload[0], payload[1], payload[2], payload[3]]);
                     self.pending.remove(&acked);
                 }
+                continue;
+            }
+            // Photon command type 4 = Disconnect (the server kicked us).
+            if ctype == 4 {
+                let code = payload.first().copied().unwrap_or(0);
+                self.disconnect = Some(format!(
+                    "сервер разорвал соединение (Disconnect, код 0x{code:02X})"
+                ));
                 continue;
             }
             if ctype == T_VERIFY {
