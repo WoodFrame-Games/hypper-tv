@@ -215,7 +215,16 @@ public class MainActivity extends Activity {
                 log("не удалось запустить поток");
                 return;
             }
-            startService(new android.content.Intent(this, PumpService.class));
+            try {
+                android.content.Intent svc = new android.content.Intent(this, PumpService.class);
+                if (android.os.Build.VERSION.SDK_INT >= 26) {
+                    startForegroundService(svc);
+                } else {
+                    startService(svc);
+                }
+            } catch (Throwable e) {
+                log("сервис не запустился: " + e);
+            }
             if (!video.isEmpty() && !patternBox.isChecked()) {
                 startFramePump(video, text(startSec));
             }
