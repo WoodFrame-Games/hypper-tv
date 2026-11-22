@@ -90,6 +90,7 @@ pub fn parse() -> Result<Option<Config>, String> {
             "--ytdlp" => cfg.ytdlp = need(&mut it, &a)?,
             "--nick" => cfg.nickname = need(&mut it, &a)?,
             "--loop" => cfg.loop_input = true,
+            "--cli" => {}
             "--cols" => cfg.cols = need(&mut it, &a)?.parse().map_err(|_| "bad --cols")?,
             "--rows" => cfg.rows = need(&mut it, &a)?.parse().map_err(|_| "bad --rows")?,
             "--w" => cfg.cell_w = need(&mut it, &a)?.parse().map_err(|_| "bad --w")?,

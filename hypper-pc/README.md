@@ -1,8 +1,24 @@
 # hypper-pc
 
-Native Windows/Linux port of the Android video wall: creates the Photon room,
-spawns the wall of `Monitor` props and streams a local video file (or a
-YouTube/HTTP stream) as per-monitor rich text.
+Native Windows PC port of the Android app: creates the Photon room, spawns the
+wall of `Monitor` props and streams a video (local file, http(s) stream or
+YouTube) as per-monitor rich text.
+
+## GUI
+
+Double-click `hypper-pc.exe` (or run it without arguments). Fill in the room,
+password and video path, press **Старт**. The journal at the bottom shows the
+same messages as the Android log. **Стоп** ends the run.
+
+## CLI
+
+```powershell
+hypper-pc --cli --url "C:\video\movie.mp4" --room HypperTV --password 1234
+```
+
+Defaults match the Android app: 7x5 monitors, 22x12 pixels per monitor, text
+size 42, 4 fps. `--help` lists every option (`--loop`, `--seconds`,
+`--ffmpeg`, `--ytdlp`, ...).
 
 ## Build
 
@@ -11,16 +27,5 @@ cd hypper-pc
 cargo build --release
 ```
 
-The binary is `target/release/hypper-pc.exe`.
-
-## Run
-
-```powershell
-hypper-pc --url "C:\video\movie.mp4" --room HypperTV --password 1234
-```
-
-Defaults match the Android app: 7x5 monitors, 22x12 pixels per monitor,
-text size 42, 4 fps. `--help` lists every option.
-
-Video is decoded by `ffmpeg` (and `yt-dlp` for YouTube links), so both must be
-available in `PATH` or passed explicitly with `--ffmpeg` / `--ytdlp`.
+Video is decoded by `ffmpeg` (and `yt-dlp` for YouTube), so both must be
+available in `PATH` or passed explicitly.

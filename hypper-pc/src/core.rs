@@ -2,6 +2,26 @@ use hypper_rust::client::{Photon, HOST, PORT};
 use std::time::{Duration, Instant};
 
 use crate::args::Config;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::OnceLock;
+
+static LOG: OnceLock<Box<dyn Fn(String) + Send + Sync>> = OnceLock::new();
+pub static STOP: AtomicBool = AtomicBool::new(false);
+
+pub fn set_logger(f: impl Fn(String) + Send + Sync + 'static) {
+    let _ = LOG.set(Box::new(f));
+}
+
+pub fn emit(s: String) {
+    match LOG.get() {
+        Some(f) => f(s),
+        None => println!("{s}"),
+    }
+}
+
+macro_rules! log {
+    ($($a:tt)*) => { crate::core::emit(format!($($a)*)) };
+}
 use crate::video::VideoSource;
 
 const UID: &str = "bc57d0403bb30f8d1deaba727cca5d23";
@@ -64,10 +84,13 @@ fn cell_text(frame: &[u8], ww: usize, wh: usize, x0: usize, y0: usize,
 
 fn connect(host: &str, port: u16) -> Result<Photon, String> {
     for attempt in 1..=6 {
+        if STOP.load(Ordering::Relaxed) {
+            return Err("stopped".into());
+        }
         match Photon::handshake(host, port) {
             Ok(p) => return Ok(p),
             Err(e) => {
-                println!("handshake attempt {attempt}: {e}");
+                log!("handshake attempt {attempt}: {e}");
                 std::thread::sleep(Duration::from_millis(1500));
             }
         }
@@ -76,6 +99,7 @@ fn connect(host: &str, port: u16) -> Result<Photon, String> {
 }
 
 pub fn run(cfg: Config) -> Result<(), String> {
+    STOP.store(false, Ordering::Relaxed);
     let n = cfg.cols * cfg.rows;
     if n == 0 || n > 1000 {
         return Err(format!("bad wall size: {n} props"));
@@ -85,11 +109,11 @@ pub fn run(cfg: Config) -> Result<(), String> {
     }
     let wall_w = cfg.cols * cfg.cell_w;
     let wall_h = cfg.rows * cfg.cell_h;
-    println!("room: {} ({}x{})", cfg.room, cfg.cols, cfg.rows);
-    println!("wall: {wall_w}x{wall_h} px, {n} objects");
+    log!("room: {} ({}x{})", cfg.room, cfg.cols, cfg.rows);
+    log!("wall: {wall_w}x{wall_h} px, {n} objects");
     let mut m = connect(HOST, PORT)?;
     let rc = m.authenticate(UID);
-    println!("auth rc={rc}");
+    log!("auth rc={rc}");
     if rc != 0 {
         return Err(format!("auth failed rc={rc}"));
     }
@@ -100,7 +124,7 @@ pub fn run(cfg: Config) -> Result<(), String> {
         &cfg.room, cfg.max_players, &cfg.password, true, cfg.mode,
         cfg.max_props, cfg.max_vehicles, &cfg.nickname,
     );
-    println!("create rc={rc} gs={gs}");
+    log!("create rc={rc} gs={gs}");
     if rc != 0 || gs.is_empty() {
         return Err(format!("create failed rc={rc}"));
     }
@@ -111,7 +135,7 @@ pub fn run(cfg: Config) -> Result<(), String> {
     };
     let mut g = connect(&gh, gp)?;
     let rc = g.authenticate_token(&token);
-    println!("gs auth rc={rc}");
+    log!("gs auth rc={rc}");
     if rc != 0 {
         return Err(format!("gs auth failed rc={rc}"));
     }
@@ -119,23 +143,26 @@ pub fn run(cfg: Config) -> Result<(), String> {
         &cfg.room, cfg.max_players, &cfg.password, true, cfg.mode,
         cfg.max_props, cfg.max_vehicles, &cfg.nickname,
     );
-    println!("gs create rc={rc}");
+    log!("gs create rc={rc}");
     if rc != 0 {
         return Err(format!("gs create failed rc={rc}"));
     }
     let _ = g.wait_in_room(8000);
-    println!("in room, actor={:?}", g.actor);
+    log!("in room, actor={:?}", g.actor);
     let mut src = VideoSource::start(
         &cfg.ffmpeg, &cfg.ytdlp, &cfg.url, wall_w, wall_h, cfg.fps,
         cfg.loop_input,
     )?;
-    println!("source: {}", src.label);
+    log!("source: {}", src.label);
     let first = src.read_frame().ok_or("no video frames")?;
     let mut vids = Vec::with_capacity(n as usize);
     for i in 0..n {
+        if STOP.load(Ordering::Relaxed) {
+            return Ok(());
+        }
         let (x, y) = wall_pos(i, cfg.cols, cfg.rows);
         let vid = g.spawn_prop("Monitor", x, y, Z, 801 + i);
-        println!("monitor #{i} view={vid}");
+        log!("monitor #{i} view={vid}");
         vids.push(vid);
         g.keepalive(300);
     }
@@ -144,7 +171,7 @@ pub fn run(cfg: Config) -> Result<(), String> {
     let mut frame = first;
     let mut last = Instant::now();
     let mut sent = 0u64;
-    while Instant::now() < end {
+    while Instant::now() < end && !STOP.load(Ordering::Relaxed) {
         for i in 0..n {
             let col = i % cfg.cols;
             let row = i / cfg.cols;
@@ -171,6 +198,6 @@ pub fn run(cfg: Config) -> Result<(), String> {
             None => break,
         }
     }
-    println!("done, {sent} frames");
+    log!("done, {sent} frames");
     Ok(())
 }
