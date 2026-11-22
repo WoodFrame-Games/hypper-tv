@@ -113,10 +113,11 @@ Add `--ez pattern true` for the calibration wall.
 
 ## Python prototypes
 
-`PhotonPy/` contains the original scripts (`hypper_tv.py`, `ptWorkFreeze.py`,
-`monitor_video.py`, `Optimized.py`, …). They implement the same protocol and
-were used to calibrate geometry and text layout. They need the game's Photon
-AppId/auth constants (already present in the scripts) and Python 3.
+`PhotonPy/` contains the original scripts needed to reproduce the video wall
+(`hypper_tv.py`, `monitor_test.py`, `ptWorkFreeze.py`, `photon0509.py`) plus
+`monitor_fill_test.py` (the red/green pixel-fill diagnostic). They implement
+the same protocol and were used to calibrate geometry and text layout. They
+need the game's Photon AppId/auth constants (already present) and Python 3.
 
 ## Legal
 
