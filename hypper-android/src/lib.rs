@@ -29,6 +29,7 @@ struct Cfg {
     max_vehicles: i32,
     wait_ready_secs: u32,
     pattern: bool,
+    video: bool,
     cy: f32,
 }
 
@@ -48,6 +49,7 @@ fn parse_cfg(raw: &str) -> Cfg {
         max_vehicles: 40,
         wait_ready_secs: 20,
         pattern: false,
+        video: false,
         cy: 0.0,
     };
     for part in raw.split(';') {
@@ -69,6 +71,7 @@ fn parse_cfg(raw: &str) -> Cfg {
             "vehicles" => c.max_vehicles = v.parse().unwrap_or(c.max_vehicles),
             "wait" => c.wait_ready_secs = v.parse().unwrap_or(c.wait_ready_secs),
             "pattern" => c.pattern = v == "1" || v.eq_ignore_ascii_case("true"),
+            "video" => c.video = v == "1" || v.eq_ignore_ascii_case("true"),
             "cy" => c.cy = v.parse().unwrap_or(0.0),
             _ => {}
         }
@@ -411,6 +414,34 @@ fn worker(vm: Arc<JavaVM>, cfg: Cfg) {
     wait_for_game_client(&mut g, &vm, cfg.wait_ready_secs);
     if !RUNNING.load(Ordering::Relaxed) {
         return;
+    }
+
+    // If a video is configured, wait for the first decoded frame before
+    // spawning the wall. Otherwise the wall would appear with the fallback
+    // gradient ("палитра цветов") while the mp4 is still downloading.
+    if cfg.video {
+        let t0 = Instant::now();
+        let mut logged = 0u64;
+        loop {
+            let ready = FRAME.lock().map(|f| f.is_some()).unwrap_or(false);
+            if ready {
+                log(&vm, &format!("видео готово ({} с), строю стену", t0.elapsed().as_secs()));
+                break;
+            }
+            if !RUNNING.load(Ordering::Relaxed) {
+                return;
+            }
+            if t0.elapsed() > Duration::from_secs(180) {
+                log(&vm, "видео не появилось за 180 с; строю стену с градиентом");
+                break;
+            }
+            let s = t0.elapsed().as_secs();
+            if s >= logged + 10 {
+                logged = s;
+                log(&vm, &format!("видео загружается/декодируется… {s} с"));
+            }
+            g.keepalive(250);
+        }
     }
 
     // 34x8 at 30% is what actually fills a Monitor on the phone: the game

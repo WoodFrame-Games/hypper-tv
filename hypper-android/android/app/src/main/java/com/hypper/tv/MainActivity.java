@@ -202,6 +202,7 @@ public class MainActivity extends Activity {
                     + ";mode=" + text(mode)
                     + ";wait=" + text(waitSec)
                     + ";pattern=" + (patternBox.isChecked() ? "1" : "0")
+                    + ";video=" + ((!text(url).isEmpty() && !patternBox.isChecked()) ? "1" : "0")
                     + ";cy=" + text(cyField)
                     + ";props=1000;vehicles=40";
             log("запуск: " + cfg);
