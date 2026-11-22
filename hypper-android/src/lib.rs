@@ -78,8 +78,8 @@ fn parse_cfg(raw: &str) -> Cfg {
     }
     c.cols = c.cols.clamp(1, 40);
     c.rows = c.rows.clamp(1, 25);
-    c.cell_w = c.cell_w.clamp(1, 18);
-    c.cell_h = c.cell_h.clamp(1, 12);
+    c.cell_w = c.cell_w.clamp(1, 64);
+    c.cell_h = c.cell_h.clamp(1, 48);
     c.text_size = c.text_size.clamp(10, 200);
     c.fps = if c.fps.is_finite() {
         c.fps.clamp(0.2, 30.0)
@@ -448,6 +448,18 @@ fn worker(vm: Arc<JavaVM>, cfg: Cfg) {
     // auto-scales the text block, and at 50% only ~5 of 12 rows were visible.
     let (src_w, src_h) = (cfg.cell_w, cfg.cell_h);
     let (cw, ch) = (cfg.cell_w, cfg.cell_h);
+    log(
+        &vm,
+        &format!(
+            "кадр ожидаю {}x{} ({}x{} панелей по {}x{})",
+            cfg.cols * src_w,
+            cfg.rows * src_h,
+            cfg.cols,
+            cfg.rows,
+            src_w,
+            src_h
+        ),
+    );
     let (mon_w, mon_h) = (1.73f32, 1.06f32);
     let requested = cfg.cols.saturating_mul(cfg.rows);
     let total = requested.min(cfg.max_props as u32).min(1000);
@@ -514,6 +526,12 @@ fn worker(vm: Arc<JavaVM>, cfg: Cfg) {
                 .as_ref()
                 .map(|(fw, fh, bytes)| (*fw, *fh, bytes.clone()))
         });
+        if frame == 0 {
+            match frame_snapshot.as_ref() {
+                Some((fw, fh, _)) => log(&vm, &format!("кадр в ядре: {fw}x{fh}")),
+                None => log(&vm, "кадра в ядре нет — рисую градиент"),
+            }
+        }
         let t0 = Instant::now();
         for i in 0..total {
             let col = i % cfg.cols;

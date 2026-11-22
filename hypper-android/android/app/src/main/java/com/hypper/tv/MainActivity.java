@@ -348,6 +348,9 @@ public class MainActivity extends Activity {
         }
         final long startMs = sm;
         pumping = true;
+        log("видео: кадр " + wallW + "x" + wallH + " (" + tileW + "x" + tileH
+                + " на панель, " + wallW / Math.max(1, tileW) + "x"
+                + wallH / Math.max(1, tileH) + " панелей)");
         final File dir = getCacheDir();
         new Thread(() -> {
             VideoResolver.Log log = MainActivity::log;
