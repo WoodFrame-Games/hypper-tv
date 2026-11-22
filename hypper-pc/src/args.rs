@@ -16,6 +16,7 @@ pub struct Config {
     pub ffmpeg: String,
     pub ytdlp: String,
     pub seconds: Option<u64>,
+    pub start_sec: f32,
     pub nickname: String,
     pub loop_input: bool,
 }
@@ -40,6 +41,7 @@ impl Default for Config {
             ffmpeg: "ffmpeg".into(),
             ytdlp: "yt-dlp".into(),
             seconds: None,
+            start_sec: 0.0,
             nickname: "HypperPC".into(),
             loop_input: false,
         }
@@ -60,6 +62,7 @@ USAGE: hypper-pc --url <path|url> [options]
   --size N         text size percent (default 42)
   --fps N          frames per second (default 4)
   --seconds N      stop after N seconds (default: until the video ends)
+  --start N        start the video at N seconds (default 0)
   --mode N         0 Free / 1 Private / 2 Adventure
   --max-props N    prop limit (default 1000)
   --max-vehicles N vehicle limit (default 40)
@@ -98,6 +101,7 @@ pub fn parse() -> Result<Option<Config>, String> {
             "--size" => cfg.size = need(&mut it, &a)?.parse().map_err(|_| "bad --size")?,
             "--fps" => cfg.fps = need(&mut it, &a)?.parse().map_err(|_| "bad --fps")?,
             "--seconds" => cfg.seconds = Some(need(&mut it, &a)?.parse().map_err(|_| "bad --seconds")?),
+            "--start" => cfg.start_sec = need(&mut it, &a)?.parse().map_err(|_| "bad --start")?,
             "--mode" => cfg.mode = need(&mut it, &a)?.parse().map_err(|_| "bad --mode")?,
             "--max-props" => cfg.max_props = need(&mut it, &a)?.parse().map_err(|_| "bad --max-props")?,
             "--max-vehicles" => cfg.max_vehicles = need(&mut it, &a)?.parse().map_err(|_| "bad --max-vehicles")?,

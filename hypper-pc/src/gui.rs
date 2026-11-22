@@ -30,6 +30,7 @@ fn wide(ui: &mut egui::Ui, v: &mut String, hint: &str) {
 struct App {
     cfg: Config,
     seconds_text: String,
+    start_text: String,
     logs: Arc<Mutex<Vec<String>>>,
     running: Arc<Mutex<bool>>,
 }
@@ -49,6 +50,7 @@ impl App {
         Self {
             cfg: Config::default(),
             seconds_text: String::new(),
+            start_text: String::new(),
             logs,
             running: Arc::new(Mutex::new(false)),
         }
@@ -96,6 +98,10 @@ impl eframe::App for App {
                 ui.add(egui::TextEdit::singleline(&mut self.seconds_text).desired_width(70.0));
                 ui.label("");
                 ui.end_row();
+                ui.label("Начать с секунды");
+                ui.add(egui::TextEdit::singleline(&mut self.start_text).desired_width(70.0));
+                ui.label("");
+                ui.end_row();
                 ui.label("Зациклить видео");
                 ui.checkbox(&mut self.cfg.loop_input, "");
                 ui.label("");
@@ -131,6 +137,7 @@ impl App {
     fn start(&mut self) {
         core::STOP.store(false, Ordering::Relaxed);
         self.cfg.seconds = self.seconds_text.trim().parse::<u64>().ok();
+        self.cfg.start_sec = self.start_text.trim().parse::<f32>().unwrap_or(0.0);
         *self.running.lock().unwrap() = true;
         let cfg = self.cfg.clone();
         let running = self.running.clone();

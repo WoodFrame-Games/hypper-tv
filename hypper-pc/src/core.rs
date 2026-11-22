@@ -151,7 +151,7 @@ pub fn run(cfg: Config) -> Result<(), String> {
     log!("in room, actor={:?}", g.actor);
     let mut src = VideoSource::start(
         &cfg.ffmpeg, &cfg.ytdlp, &cfg.url, wall_w, wall_h, cfg.fps,
-        cfg.loop_input,
+        cfg.start_sec, cfg.loop_input,
     )?;
     log!("source: {}", src.label);
     let first = src.read_frame().ok_or("no video frames")?;

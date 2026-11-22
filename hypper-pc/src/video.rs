@@ -16,12 +16,13 @@ impl VideoSource {
         wall_w: u32,
         wall_h: u32,
         fps: f32,
+        start_sec: f32,
         looping: bool,
     ) -> Result<Self, String> {
         let lower = input.to_lowercase();
         let youtube = lower.contains("youtu");
         if youtube {
-            return Self::start_youtube(ytdlp, ffmpeg, input, wall_w, wall_h, fps);
+            return Self::start_youtube(ytdlp, ffmpeg, input, wall_w, wall_h, fps, start_sec);
         }
         if !(std::path::Path::new(input).is_file() || lower.starts_with("http")) {
             return Err(format!("unsupported source: {input}"));
@@ -29,6 +30,9 @@ impl VideoSource {
         let size = (wall_w * wall_h * 3) as usize;
         let mut ff = Command::new(ffmpeg);
         ff.args(["-loglevel", "error"]);
+        if start_sec > 0.0 {
+            ff.arg("-ss").arg(format!("{start_sec:.2}"));
+        }
         if looping {
             ff.args(["-stream_loop", "-1"]);
         }
@@ -62,14 +66,19 @@ impl VideoSource {
         w: u32,
         h: u32,
         fps: f32,
+        start_sec: f32,
     ) -> Result<Self, String> {
         let mut yt = Command::new(ytdlp)
             .args(["-f", "bv*[height<=720]/b", "-o", "-", input])
             .stdout(Stdio::piped())
             .spawn()
             .map_err(|e| format!("yt-dlp: {e}"))?;
-        let mut ff = Command::new(ffmpeg)
-            .args(["-loglevel", "error", "-i", "pipe:0", "-an"])
+        let mut ff = Command::new(ffmpeg);
+        ff.args(["-loglevel", "error", "-i", "pipe:0", "-an"]);
+        if start_sec > 0.0 {
+            ff.arg("-ss").arg(format!("{start_sec:.2}"));
+        }
+        let mut ff = ff
             .arg("-vf")
             .arg(format!("scale={w}:{h}:flags=neighbor,fps={fps}"))
             .args(["-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"])
