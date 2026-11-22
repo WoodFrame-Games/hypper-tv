@@ -42,7 +42,7 @@ public class MainActivity extends Activity {
     private volatile boolean sessionActive = false;
 
     private EditText room, cols, rows, cellW, cellH, textSize, fps, maxPlayers, password, mode,
-            url, startSec, waitSec;
+            url, startSec, waitSec, cyField;
     private CheckBox patternBox;
     private Button startButton;
 
@@ -102,9 +102,11 @@ public class MainActivity extends Activity {
         room = field(root, "Комната (можно теги: <color=green>HypperTV</color>)", "HypperTV");
         cols = field(root, "Колонки", "7");
         rows = field(root, "Ряды", "5");
-        cellW = field(root, "Пикселей на Monitor по X (18)", "18");
-        cellH = field(root, "Пикселей на Monitor по Y (10)", "10");
-        textSize = field(root, "Размер текста (%)", "50");
+        // Resolution inside a monitor is fixed (18x10 at 50%); the knobs are
+        // hidden on purpose - they only make the picture worse.
+        cellW = hiddenField("22");
+        cellH = hiddenField("12");
+        textSize = hiddenField("42");
         fps = field(root, "Кадров/с", "2");
         maxPlayers = field(root, "Игроков (max)", "10");
         password = field(root, "Пароль", "");
@@ -112,12 +114,15 @@ public class MainActivity extends Activity {
         url = field(root, "Ссылка на видео (YouTube или mp4)", "");
         startSec = field(root, "Старт с секунды", "0");
         waitSec = field(root, "Ждать игрока/загрузку (сек, 0 = сразу)", "20");
-        EditText cyField = field(root, "Центр стены по Y (0 = авто)", "0");
+        cyField = field(root, "Центр стены по Y (0 = авто)", "0");
 
         patternBox = new CheckBox(this);
         patternBox.setText("Калибровка: цвет по колонке, яркость по ряду, белый угол слева-сверху");
         patternBox.setTextSize(12f);
         root.addView(patternBox);
+
+        restorePrefs();
+        restoreBool("pattern", patternBox);
 
         // Параметры можно передать интентом (удобно для проверок):
         //   adb shell am start -n com.hypper.tv/.MainActivity \
@@ -200,6 +205,7 @@ public class MainActivity extends Activity {
                     + ";cy=" + text(cyField)
                     + ";props=1000;vehicles=40";
             log("запуск: " + cfg);
+            savePrefs();
             sessionActive = true;
             startButton.setEnabled(false);
             if (!nativeStart(cfg)) {
@@ -268,6 +274,59 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Поле, которое не показывается в UI (фиксированный параметр). */
+    private EditText hiddenField(String def) {
+        EditText e = new EditText(this);
+        e.setText(def);
+        return e;
+    }
+
+    /** Сохранение всех параметров между запусками приложения. */
+    private void savePrefs() {
+        android.content.SharedPreferences.Editor e =
+                getSharedPreferences("hypper_tv", MODE_PRIVATE).edit();
+        e.putString("room", text(room));
+        e.putString("cols", text(cols));
+        e.putString("rows", text(rows));
+        e.putString("fps", text(fps));
+        e.putString("max", text(maxPlayers));
+        e.putString("password", text(password));
+        e.putString("mode", text(mode));
+        e.putString("url", text(url));
+        e.putString("startSec", text(startSec));
+        e.putString("wait", text(waitSec));
+        e.putString("cy", text(cyField));
+        e.putBoolean("pattern", patternBox != null && patternBox.isChecked());
+        e.apply();
+    }
+
+    private void restorePrefs() {
+        android.content.SharedPreferences p = getSharedPreferences("hypper_tv", MODE_PRIVATE);
+        restoreField(p, "room", room);
+        restoreField(p, "cols", cols);
+        restoreField(p, "rows", rows);
+        restoreField(p, "fps", fps);
+        restoreField(p, "max", maxPlayers);
+        restoreField(p, "password", password);
+        restoreField(p, "mode", mode);
+        restoreField(p, "url", url);
+        restoreField(p, "startSec", startSec);
+        restoreField(p, "wait", waitSec);
+        restoreField(p, "cy", cyField);
+    }
+
+    private void restoreField(android.content.SharedPreferences p, String key, EditText target) {
+        String v = p.getString(key, null);
+        if (v != null) {
+            target.setText(v);
+        }
+    }
+
+    private void restoreBool(String key, android.widget.CheckBox box) {
+        box.setChecked(getSharedPreferences("hypper_tv", MODE_PRIVATE)
+                .getBoolean(key, false));
+    }
+
     /** Достаём кадры из видео и отдаём в ядро: стена рисует их как текст. */
     private void startFramePump(final String input, final String startSecStr) {
         final float fpsValue;
@@ -276,8 +335,8 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             return;
         }
-        final int tileW = Math.max(1, Math.min(18, parseInt(text(cellW), 18)));
-        final int tileH = Math.max(1, Math.min(12, parseInt(text(cellH), 12)));
+        final int tileW = Math.max(1, Math.min(40, parseInt(text(cellW), 22)));
+        final int tileH = Math.max(1, Math.min(24, parseInt(text(cellH), 12)));
         final int wallW = Math.max(1, Math.min(40, parseInt(text(cols), 7))) * tileW;
         final int wallH = Math.max(1, Math.min(25, parseInt(text(rows), 5))) * tileH;
         long sm;

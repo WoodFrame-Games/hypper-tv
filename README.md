@@ -26,6 +26,8 @@ built from are included in [`PhotonPy/`](PhotonPy).
   pushed into Rust, which slices the frame into one text block per monitor.
 - **Calibration mode** (per-column hue, per-row brightness, white marker) to
   verify tile order, mirroring, and clipping from a single screenshot.
+- All settings are **saved between launches** (room, password, video URL, fps,
+  wall size, wait time, wall centre, calibration flag).
 - Configurable from the UI or from `adb shell am start ... --es ...`.
 
 ## Repository layout
@@ -55,8 +57,10 @@ docs/            Screenshots
   the text is rendered upside down, so both the X axis and the row order are
   pre-flipped when generating each tile.
 - **Text grid.** The game does not scale `<size>` linearly; a grid of
-  **18x10 at `size=50%`** fills ~91% of the panel width and ~77% of its height.
-  The rest is the monitor's frame.
+  **22x12 at `size=42%`** fills the panel best. The remaining red strips in the
+  red-background test (`PhotonPy/monitor_fill_test.py`) are the font's line
+  spacing (~10-15% of a row), not our margins; a denser grid makes them
+  sub-pixel and they blend with the pixels.
 - **Panel background** is a constant black (`#000000`), like in the old Python
   script: uncovered edges and inter-line gaps blend into the black frame.
 - **Wall height.** The bottom row is placed at 2.0 m so it does not sink into the
