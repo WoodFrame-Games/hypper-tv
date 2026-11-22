@@ -167,11 +167,11 @@ pub fn run(cfg: Config) -> Result<(), String> {
         g.keepalive(300);
     }
     let period = Duration::from_secs_f32(1.0 / cfg.fps.max(0.5));
-    let end = Instant::now() + Duration::from_secs(cfg.seconds);
+    let end = cfg.seconds.map(|s| Instant::now() + Duration::from_secs(s));
     let mut frame = first;
     let mut last = Instant::now();
     let mut sent = 0u64;
-    while Instant::now() < end && !STOP.load(Ordering::Relaxed) {
+    while !STOP.load(Ordering::Relaxed) && end.map_or(true, |e| Instant::now() < e) {
         for i in 0..n {
             let col = i % cfg.cols;
             let row = i / cfg.cols;

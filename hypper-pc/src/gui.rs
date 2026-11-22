@@ -9,7 +9,7 @@ use crate::core;
 
 pub fn run_gui() -> eframe::Result<()> {
     let opts = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([620.0, 660.0]),
+        viewport: egui::ViewportBuilder::default().with_inner_size([820.0, 660.0]),
         ..Default::default()
     };
     eframe::run_native(
@@ -19,8 +19,17 @@ pub fn run_gui() -> eframe::Result<()> {
     )
 }
 
+fn wide(ui: &mut egui::Ui, v: &mut String, hint: &str) {
+    ui.add(
+        egui::TextEdit::singleline(v)
+            .hint_text(hint)
+            .desired_width(f32::INFINITY),
+    );
+}
+
 struct App {
     cfg: Config,
+    seconds_text: String,
     logs: Arc<Mutex<Vec<String>>>,
     running: Arc<Mutex<bool>>,
 }
@@ -39,6 +48,7 @@ impl App {
         });
         Self {
             cfg: Config::default(),
+            seconds_text: String::new(),
             logs,
             running: Arc::new(Mutex::new(false)),
         }
@@ -50,19 +60,14 @@ impl eframe::App for App {
         ctx.request_repaint_after(Duration::from_millis(250));
         let running = *self.running.lock().unwrap();
         egui::TopBottomPanel::top("form").show(ctx, |ui| {
+            ui.label("Комната");
+            wide(ui, &mut self.cfg.room, "HypperTV");
+            ui.label("Пароль");
+            wide(ui, &mut self.cfg.password, "");
+            ui.label("Видео (путь или URL)");
+            wide(ui, &mut self.cfg.url, "C:\\video.mp4 или https://...");
+            ui.add_space(6.0);
             egui::Grid::new("grid").num_columns(3).spacing([10.0, 6.0]).show(ui, |ui| {
-                ui.label("Комната");
-                ui.text_edit_singleline(&mut self.cfg.room);
-                ui.label("");
-                ui.end_row();
-                ui.label("Пароль");
-                ui.text_edit_singleline(&mut self.cfg.password);
-                ui.label("");
-                ui.end_row();
-                ui.label("Видео (путь или URL)");
-                ui.text_edit_singleline(&mut self.cfg.url);
-                ui.label("");
-                ui.end_row();
                 ui.label("Колонки");
                 ui.add(egui::DragValue::new(&mut self.cfg.cols).range(1..=64));
                 ui.label("");
@@ -87,19 +92,18 @@ impl eframe::App for App {
                 ui.add(egui::DragValue::new(&mut self.cfg.fps).speed(0.5).range(0.5..=30.0));
                 ui.label("");
                 ui.end_row();
-                ui.label("Секунд");
-                ui.add(egui::DragValue::new(&mut self.cfg.seconds).range(5..=86400));
+                ui.label("Секунд (пусто = до конца видео)");
+                ui.add(egui::TextEdit::singleline(&mut self.seconds_text).desired_width(70.0));
                 ui.label("");
                 ui.end_row();
                 ui.label("Зациклить видео");
                 ui.checkbox(&mut self.cfg.loop_input, "");
                 ui.label("");
                 ui.end_row();
-                ui.label("ffmpeg");
-                ui.text_edit_singleline(&mut self.cfg.ffmpeg);
-                ui.label("");
-                ui.end_row();
             });
+            ui.add_space(6.0);
+            ui.label("ffmpeg");
+            wide(ui, &mut self.cfg.ffmpeg, "ffmpeg");
             ui.horizontal(|ui| {
                 if !running && ui.button("Старт").clicked() {
                     self.start();
@@ -126,6 +130,7 @@ impl eframe::App for App {
 impl App {
     fn start(&mut self) {
         core::STOP.store(false, Ordering::Relaxed);
+        self.cfg.seconds = self.seconds_text.trim().parse::<u64>().ok();
         *self.running.lock().unwrap() = true;
         let cfg = self.cfg.clone();
         let running = self.running.clone();

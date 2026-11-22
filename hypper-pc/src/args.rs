@@ -15,7 +15,7 @@ pub struct Config {
     pub url: String,
     pub ffmpeg: String,
     pub ytdlp: String,
-    pub seconds: u64,
+    pub seconds: Option<u64>,
     pub nickname: String,
     pub loop_input: bool,
 }
@@ -39,7 +39,7 @@ impl Default for Config {
             url: String::new(),
             ffmpeg: "ffmpeg".into(),
             ytdlp: "yt-dlp".into(),
-            seconds: 900,
+            seconds: None,
             nickname: "HypperPC".into(),
             loop_input: false,
         }
@@ -59,7 +59,7 @@ USAGE: hypper-pc --url <path|url> [options]
   --h N            pixels per monitor Y (default 12)
   --size N         text size percent (default 42)
   --fps N          frames per second (default 4)
-  --seconds N      run time (default 900)
+  --seconds N      stop after N seconds (default: until the video ends)
   --mode N         0 Free / 1 Private / 2 Adventure
   --max-props N    prop limit (default 1000)
   --max-vehicles N vehicle limit (default 40)
@@ -97,7 +97,7 @@ pub fn parse() -> Result<Option<Config>, String> {
             "--h" => cfg.cell_h = need(&mut it, &a)?.parse().map_err(|_| "bad --h")?,
             "--size" => cfg.size = need(&mut it, &a)?.parse().map_err(|_| "bad --size")?,
             "--fps" => cfg.fps = need(&mut it, &a)?.parse().map_err(|_| "bad --fps")?,
-            "--seconds" => cfg.seconds = need(&mut it, &a)?.parse().map_err(|_| "bad --seconds")?,
+            "--seconds" => cfg.seconds = Some(need(&mut it, &a)?.parse().map_err(|_| "bad --seconds")?),
             "--mode" => cfg.mode = need(&mut it, &a)?.parse().map_err(|_| "bad --mode")?,
             "--max-props" => cfg.max_props = need(&mut it, &a)?.parse().map_err(|_| "bad --max-props")?,
             "--max-vehicles" => cfg.max_vehicles = need(&mut it, &a)?.parse().map_err(|_| "bad --max-vehicles")?,
