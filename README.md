@@ -36,6 +36,7 @@ built from are included in [`PhotonPy/`](PhotonPy).
 hypper-rust/     Photon protocol 18 client, room creation, events, ACK/retransmit
 hypper-android/  cdylib JNI wrapper (room + wall + frame loop) and the Android app
   android/       Java UI, YouTube resolver, MediaMetadataRetriever frame pump
+hypper-pc/       Native PC port (Rust CLI): same wall, ffmpeg/yt-dlp video input
 PhotonPy/        Original Python prototypes (reference implementation)
 docs/            Screenshots
 ```

@@ -67,16 +67,36 @@ MON_ROT = (0.0, 1.0, 0.0, 0.0)   # монитор повёрнут на 180° п
 def frame_text(frame: bytes, w: int, h: int, size: int, fw: int, fh: int,
                ox: int = 0, oy: int = 0) -> str:
     """Кусок RGB24-кадра (fw x fh) -> rich-text из блоков █ (h строк по w)."""
-    lines = []
+    # Как cell_text_from_frame в Android: Monitor зеркалит текст по X и
+    # переворачивает по Y, поэтому кадр заранее отражаем. Цвета RLE.
+    wall_w, wall_h = max(1, fw), max(1, fh)
+    out = [f"<size={size}%><b>"]
     for y in range(h):
-        blocks = []
-        base = ((oy + y) * fw + ox) * 3
-        for x in range(w):
-            i = base + x * 3
-            r, g, b = frame[i], frame[i + 1], frame[i + 2]
-            blocks.append(f"<color=#{r >> 4:X}{g >> 4:X}{b >> 4:X}>\u2588</color>")
-        lines.append("<b>" + "".join(blocks) + "</b>")
-    return f"<size={size}%>" + "\n".join(lines) + "</size>"
+        sy = min(oy + (h - 1 - y), wall_h - 1)
+        x = 0
+        while x < w:
+            gx = min(ox + (w - 1 - x), wall_w - 1)
+            i = (sy * wall_w + gx) * 3
+            if i + 2 < len(frame):
+                r, g, b = frame[i] >> 4, frame[i + 1] >> 4, frame[i + 2] >> 4
+            else:
+                r = g = b = 0
+            x2 = x + 1
+            while x2 < w:
+                gx2 = min(ox + (w - 1 - x2), wall_w - 1)
+                i2 = (sy * wall_w + gx2) * 3
+                if not (i2 + 2 < len(frame)
+                        and frame[i2] >> 4 == r
+                        and frame[i2 + 1] >> 4 == g
+                        and frame[i2 + 2] >> 4 == b):
+                    break
+                x2 += 1
+            out.append(f"<color=#{r:X}{g:X}{b:X}>" + "\u2588" * (x2 - x) + "</color>")
+            x = x2
+        if y + 1 < h:
+            out.append("\n")
+    out.append("</b></size>")
+    return "".join(out)
 
 
 def load_frames(path: str, w: int, h: int) -> list[bytes]:
@@ -158,6 +178,8 @@ class UrlSource:
         self.ytdlp = ytdlp
         self.ffmpeg = ffmpeg
         self.url = url
+        # Локальный файл или прямая ссылка на видео идут в ffmpeg без yt-dlp.
+        self.direct = self._resolve_direct(url)
         self.fmt = fmt
         self.formats = []
         for f in [fmt, "18", "bv*[protocol^=m3u8]", "bv*[height<=480][ext=mp4]"]:
@@ -179,21 +201,52 @@ class UrlSource:
         self.err_yt = bytearray()
         self.err_ff = bytearray()
 
-    async def _direct_url(self) -> str:
-        """Прямая ссылка на поток (её ffmpeg умеет искать по времени)."""
-        args = [self.ytdlp]
-        if self.deno and os.path.exists(self.deno):
-            args += ["--js-runtimes", f"deno:{self.deno}"]
-        args += ["-f", self.formats[self.fmt_idx], "-g", self.url]
-        proc = await asyncio.create_subprocess_exec(
-            *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
-        out, _ = await proc.communicate()
-        for line in out.decode("utf-8", "replace").splitlines():
-            if line.startswith("http"):
-                return line.strip()
-        return ""
+    @staticmethod
+    def _resolve_direct(url: str) -> str | None:
+        """Путь к локальному файлу или прямой media-URL (ffmpeg читает сам)."""
+        from urllib.parse import urlparse, unquote
+        u = (url or "").strip()
+        if not u:
+            return None
+        # Windows drive letter (C:\...) is parsed as scheme='c' by urlparse
+        if os.name == "nt" and len(u) >= 2 and u[1] == ":" and u[0].isalpha():
+            return os.path.abspath(u) if os.path.isfile(u) else None
+        p = urlparse(u)
+        if p.scheme == "file":
+            path = unquote(p.path)
+            if os.name == "nt" and path[:1] == "/":
+                path = path[1:]
+            return path if os.path.isfile(path) else None
+        if p.scheme in ("http", "https"):
+            ext = os.path.splitext(p.path)[1].lower()
+            if ext in (".mp4", ".m4v", ".mkv", ".webm", ".mov", ".avi",
+                       ".ts", ".m3u8", ".mpd"):
+                return u
+            return None
+        if os.path.isfile(u):
+            return os.path.abspath(u)
+        return None
 
     async def start(self) -> None:
+        if self.start_sec > 0:
+            print(f"start at {self.start_sec:.0f}s", flush=True)
+
+        if self.direct:
+            ff_args = [self.ffmpeg, "-loglevel", "error"]
+            if self.start_sec > 0:
+                # для файла/URL -ss до -i = быстрый seek без чтения начала
+                ff_args += ["-ss", f"{self.start_sec:.2f}"]
+            ff_args += ["-i", self.direct,
+                        "-vf", f"scale={self.w}:{self.h}:flags=neighbor,fps={self.fps}",
+                        "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"]
+            self.ff = await asyncio.create_subprocess_exec(
+                *ff_args,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            self.drain_tasks = [
+                asyncio.create_task(self._drain(self.ff.stderr, self.err_ff))]
+            print(f"stream started (ffmpeg <- {self.direct})", flush=True)
+            return
+
         yt_args = [self.ytdlp]
         if self.deno and os.path.exists(self.deno):
             yt_args += ["--js-runtimes", f"deno:{self.deno}"]
@@ -205,8 +258,6 @@ class UrlSource:
         self.yt = await asyncio.create_subprocess_exec(
             *yt_args,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        if self.start_sec > 0:
-            print(f"start at {self.start_sec:.0f}s", flush=True)
         ff_args = [self.ffmpeg, "-loglevel", "error", "-i", "pipe:0"]
         if self.start_sec > 0:
             # на пайпе -ss до -i не работает, поэтому после: ffmpeg
@@ -268,6 +319,8 @@ class UrlSource:
             return None
 
     def next_format(self) -> bool:
+        if self.direct:
+            return False
         if self.fmt_idx + 1 < len(self.formats):
             self.fmt_idx += 1
             print(f"trying next format: {self.formats[self.fmt_idx]}", flush=True)
@@ -309,6 +362,13 @@ def parse_cycle(spec: str) -> list[tuple[int, int, int]]:
     return out
 
 
+def _default_tool(name: str, rel: str) -> str:
+    """Локальный tools/ рядом с проектом, иначе — из PATH."""
+    local = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "tools", rel)
+    return local if os.path.exists(local) else name
+
+
 async def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--room", default="", help="имя комнаты (если пусто — запрос с клавиатуры)")
@@ -319,22 +379,21 @@ async def main() -> int:
     ap.add_argument("--vid", default="",
                     help="только ID ролика: --vid EMCtX6_-eQ8")
     ap.add_argument("--url", default="",
-                    help="YouTube/URL: живой поток через yt-dlp | ffmpeg (без файла)")
-    ap.add_argument("--ytdlp", default=r"C:\Work\Hypper\tools\ytdlp\yt-dlp.exe")
-    ap.add_argument("--ffmpeg", default=r"C:\Work\Hypper\tools\ffmpeg"
-                                       r"\ffmpeg-n8.1-latest-win64-gpl-8.1\bin\ffmpeg.exe")
+                    help="YouTube-ссылка, прямой http(s) mp4/m3u8 или путь к видеофайлу")
+    ap.add_argument("--ytdlp", default=_default_tool("yt-dlp", r"yt-dlp\yt-dlp.exe"))
+    ap.add_argument("--ffmpeg", default=_default_tool("ffmpeg", r"ffmpeg\bin\ffmpeg.exe"))
     ap.add_argument("--yt-format", default="bv*[vcodec^=avc1][height<=720]")
-    ap.add_argument("--deno", default=r"C:\Work\Hypper\tools\deno\deno.exe",
+    ap.add_argument("--deno", default=_default_tool("deno", r"deno\deno.exe"),
                     help="JS-рантайм для yt-dlp")
     ap.add_argument("--loop-stream", action="store_true")
     ap.add_argument("--rgb", default=os.path.join("..", "video", "monitor_24x16.rgb"))
-    ap.add_argument("--cols", type=int, default=2, help="мониторов по X")
-    ap.add_argument("--rows", type=int, default=2, help="мониторов по Y")
-    ap.add_argument("--w", type=int, default=12, help="пикселей на монитор по X")
-    ap.add_argument("--h", type=int, default=8, help="пикселей на монитор по Y")
-    ap.add_argument("--size", type=int, default=50, help="размер текста в процентах")
+    ap.add_argument("--cols", type=int, default=7, help="мониторов по X")
+    ap.add_argument("--rows", type=int, default=5, help="мониторов по Y")
+    ap.add_argument("--w", type=int, default=22, help="пикселей на монитор по X")
+    ap.add_argument("--h", type=int, default=12, help="пикселей на монитор по Y")
+    ap.add_argument("--size", type=int, default=42, help="размер текста в процентах")
     ap.add_argument("--fps", type=float, default=4.0)
-    ap.add_argument("--wait-player", type=float, default=300.0)
+    ap.add_argument("--wait-player", type=float, default=0.0)
     ap.add_argument("--seconds", type=float, default=900.0)
     ap.add_argument("--password", default="")
     ap.add_argument("--max", type=int, default=2)
@@ -410,7 +469,7 @@ async def main() -> int:
 
     frames: list[bytes] = []
     if args.url:
-        print(f"source: {args.url}  (yt-dlp -> ffmpeg, {fw}x{fh} @ {args.fps} fps)",
+        print(f"source: {args.url}  (ffmpeg, {fw}x{fh} @ {args.fps} fps)",
               flush=True)
     elif not args.pattern:
         frames = load_frames(args.rgb, fw, fh)
